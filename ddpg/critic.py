@@ -44,14 +44,19 @@ class Critic(object):
         self.predicted_q_value = tf.placeholder(tf.float32, [None]+ self.q_dim)
 
         # Define loss and optimization Op
-        l2 = 0
+        l2 = 1e-2
         #reg_loss = tf.nn.l2_loss(self.model.layers[-1].get_weights())
         reg_loss = tf.nn.l2_loss(self.network_params[-2])
         self.loss = mean_squared_error(self.predicted_q_value, self.out)
         self.optimize = tf.train.AdamOptimizer(self.learning_rate).minimize(self.loss)
 
         # Get the gradient of the critic with respect to the action
-        self.action_grads = tf.gradients(self.out, self.action)
+        reg_factor = 300
+        self.action_grads = tf.add(tf.gradients(self.out, self.action),\
+            -reg_factor*tf.div(tf.sign(tf.reduce_sum(self.action)),tf.to_float(tf.size(self.action))))
+        #self.action_grads = tf.add(tf.gradients(self.out, self.action),\
+        #    -reg_factor*tf.div(tf.reduce_mean(self.action),tf.to_float(tf.size(self.action))))
+        #self.action_grads = tf.gradients(self.out, self.action)
         #self.action_grads = tf.gradients(self.out[:,init_length:], self.action[:,init_length:])
 
     
@@ -63,16 +68,23 @@ class Critic(object):
         action = Input(shape=self.a_dim)
         
         x = Concatenate()([observations,prev_actions])
-        x = ConvLSTM2D(8,(3,3),strides=1,padding='same',unit_forget_bias=True,return_sequences=True)(x)
+        x = ConvLSTM2D(8,(1,1),strides=1,padding='same',unit_forget_bias=True,return_sequences=True)(x)
         x = Lambda(lambda y: y[:,self.init_length:,:,:])(x)
         #        output_shape=self.a_dim)(x)
         x = Concatenate()([x,action])
-        x = TimeDistributed(Conv2D(8,(3,3),strides=1,padding='same',activation='relu'))(x)
-        x = TimeDistributed(Conv2D(8,(3,3),strides=2,padding='same',activation='relu'))(x)
-        #x = Conv2D(1,(3,3),strides=1,padding='same',activation='relu')(x)
-        x = TimeDistributed(Flatten())(x)
-        #x = TimeDistributed(Dense(32,activation='relu'))(x)
-        value = TimeDistributed(Dense(1,kernel_initializer=RandomUniform(-3e-3,3e-3),kernel_regularizer=l2(1e-4)))(x)
+        #x = BatchNormalization()(x)
+        x = TimeDistributed(Conv2D(16,(1,1),strides=1,padding='same',activation='relu'))(x)
+        #x = BatchNormalization()(x)
+        x = TimeDistributed(Conv2D(4,(1,1),strides=1,padding='same',activation='relu'))(x)
+        #x = TimeDistributed(BatchNormalization())(x)
+        if len(self.q_dim)>2:
+            value = TimeDistributed(Conv2D(1,(1,1),strides=1,padding='same',activation='relu'))(x)
+        else:
+            x = TimeDistributed(Flatten())(x)
+            value = TimeDistributed(Dense(1,kernel_initializer=RandomUniform(-3e-3,3e-3),kernel_regularizer=l2(1e-5)))(x)
+
+        #x = BatchNormalization()(x)
+        #x = TimeDistributed(Dense(16,activation='relu'))(x)
         model = Model(inputs=[observations,prev_actions,action],outputs=value)
         return(observations,prev_actions,action,value,model)
 

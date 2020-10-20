@@ -31,6 +31,8 @@ class ReplayBuffer(object):
         start_index = np.random.choice(np.arange(N+1,self.episode_length-1),batch_size)
 
         indices = zip(episode_index,start_index)
+        #s_batch = np.array([self.buffer[episode_i][0][t-N:t] for episode_i,t in \
+        #                zip(episode_index,start_index)])
         s_batch = [np.array([self.buffer[episode_i][0][t-N:t] for episode_i,t in \
                         zip(episode_index,start_index)]),
                    np.array([self.buffer[episode_i][1][t-N-1:t-1] for episode_i,t in \

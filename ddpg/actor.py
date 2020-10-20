@@ -1,5 +1,6 @@
 import tensorflow as tf
 import time
+import time
 import numpy as np
 from keras.models import Sequential
 from keras import backend as K
@@ -12,7 +13,7 @@ from keras.regularizers import l2
 
 class Actor(object):
     def __init__(self, sess, state_dim, action_dim, learning_rate=0, tau=0, batch_size=1,
-            clip_value=1,opt_length=1,init_length=0):
+            clip_value=1,opt_length=1,init_length=0,action_scaling=1):
         self.sess = sess
         self.s_dim = state_dim
         self.a_dim = action_dim
@@ -21,32 +22,40 @@ class Actor(object):
         self.batch_size = batch_size
         self.clip_value = clip_value
         self.opt_length=opt_length
+        self.action_scaling = action_scaling
 
         #Initialize actor network
-        self.observations,self.prev_actions, self.out,self.actor_model = self.create_actor_network()
+        self.observations,self.prev_actions, self.out,self.actor_model = self.create_actor_network(self.action_scaling)
         self.actor_model.summary()
 
         self.network_params = tf.trainable_variables()
+        print(self.network_params)
 
         #Initialize target network
         self.target_observations,self.target_prev_actions, self.target_out,\
-                self.target_model = self.create_actor_network()
+                self.target_model = self.create_actor_network(self.action_scaling)
 
         self.target_network_params = tf.trainable_variables()[
             len(self.network_params):]
         
+        #Initialize stateful network (real-time controller)
         self.stateful_observations,self.stateful_prev_actions, self.stateful_out,\
-                self.stateful_model = self.create_actor_network(stateful=True)
+                self.stateful_model = self.create_actor_network(self.action_scaling,stateful=True)
         self.stateful_network_params = tf.trainable_variables()[
             len(self.network_params)+len(self.target_network_params):]
 
         # Initialize action gradient (provided by the critic)
         self.action_gradient = tf.placeholder(tf.float32, [None]+ self.a_dim)
+        
+        #self.reg_action_gradients = [tf.add(grads,reg_factor*action) for grads,action in \
+        #        zip(self.clipped_actor_gradients,self.network_params)]
+
 
         #Get gradients of actor network
         self.unnormalized_actor_gradients = tf.gradients(
-                self.out[:,-opt_length:], self.network_params, -self.action_gradient[:,-opt_length:])
-        
+                self.out[:,-opt_length:], self.network_params,
+                -self.action_gradient[:,-opt_length:])
+
         #Divide gradients by batch size
         self.actor_gradients = list(map(lambda x: tf.div(x, self.batch_size*opt_length),
             self.unnormalized_actor_gradients))
@@ -55,14 +64,26 @@ class Actor(object):
         self.clipped_actor_gradients = [tf.clip_by_value(grad, -self.clip_value,
             self.clip_value) for grad in self.actor_gradients]
 
+        #This does not work yet!!! --> I think it does now
+        reg_factor = 1e-2
+        #self.clipped_actor_gradients[-1] = tf.add(self.clipped_actor_gradients[-1],-reg_factor*self.network_params[-1])
+        #self.clipped_actor_gradients[-1] = reg_factor*self.network_params[-1]
+        self.reg_actor_gradients = [tf.add(grads,reg_factor*params) if not 'bias' in \
+                params.name else grads for grads,params in \
+                zip(self.clipped_actor_gradients,self.network_params)]
+
+        #Apply regularization
+        #reg_factor = 
+        #self.clipped_actor_gradients[-1] -= 
+
         #Define optimization op
         self.optimize = tf.train.AdamOptimizer(self.learning_rate).\
-            apply_gradients(zip(self.clipped_actor_gradients,self.network_params))
+            apply_gradients(zip(self.reg_actor_gradients,self.network_params))
 
         self.num_trainable_vars = len(
             self.network_params) + len(self.target_network_params)
 
-    def create_actor_network(self,stateful=False):
+    def create_actor_network(self,action_scaling,stateful=False):
         #Creates the actor model
         #The architecture has to be changed here!
         if stateful:
@@ -72,19 +93,37 @@ class Actor(object):
             observations = Input(self.s_dim)
             prev_actions = Input(self.a_dim)
         x = Concatenate()([observations,prev_actions])
-        x = ConvLSTM2D(8,(5,5),strides=1,padding='same',unit_forget_bias=True,stateful=False,\
+        #x = BatchNormalization()(x)
+        x = ConvLSTM2D(8,(1,1),strides=1,padding='same',unit_forget_bias=True,stateful=stateful,\
                 return_sequences=True)(x)
+        #x = TimeDistributed(Conv2D(8,(3,3),strides=1,padding='same',activation='tanh'))(x)
         if not stateful:
             x = Lambda(lambda y: y[:,-self.opt_length:,:,:])(x)
 
-        #x = TimeDistributed(Conv2D(4,(3,3),strides=1,padding='same',activation='relu'))(x)
-        #x = TimeDistributed(Conv2D(1,(3,3),strides=1,padding='same',activation='relu'))(x)
-        #x = TimeDistributed(ZeroPadding2D((1,1)))(x)
-        #action = TimeDistributed(LocallyConnected2D(self.a_dim[-1],(3,3),strides=1,padding='valid',activation='tanh',use_bias=False))(x)
-        action = TimeDistributed(Conv2D(self.a_dim[-1],(3,3),strides=1,padding='same',activation='tanh',
-                kernel_initializer=RandomUniform(-3e-3,3e-3),use_bias=False))(x)
+        x = TimeDistributed(Conv2D(8,(1,1),strides=1,padding='same',activation='relu'))(x)
+        x = TimeDistributed(Conv2D(self.a_dim[-1],(1,1),strides=1,padding='same',\
+                   kernel_initializer=RandomUniform(-3e-3,3e-3),activation='tanh',\
+                   use_bias=False))(x)
+        #x = TimeDistributed(LocallyConnected2D(self.a_dim[-1],(1,1),strides=1,\
+        #        activation='tanh',use_bias=False))(x)
+        action = Lambda(lambda y: y*action_scaling)(x)
+        #action = x
         model = Model(inputs=[observations,prev_actions],outputs=action)
         return(observations,prev_actions,action,model)
+
+    def add_parameter_noise(self,noise):
+        tensor_names = [tensor.name for tensor in self.actor_model.weights]
+        #print(tensor_names)
+        #time.sleep(1)
+        weights_list = self.actor_model.get_weights()
+        #perturbed_weights = [(1+noise*np.random.randn(*weights.shape))*weights if not \
+        perturbed_weights = [(1+noise*np.random.randn(*weights.shape))*weights if not \
+        #perturbed_weights = [weights+noise*np.random.randn(*weights.shape) if not \
+                #('batch_normalization' in name)*('bias' in name)*('recurrent' in name)
+                ('batch_normalization' in name)*('bias' in name)
+                             else weights 
+                             for (name,weights) in zip(tensor_names,weights_list)]
+        self.stateful_model.set_weights(perturbed_weights)
 
     def train(self, inputs, a_gradient):
         #Performs one update of the actor
@@ -96,12 +135,12 @@ class Actor(object):
 
     def pretrain(self,gain):
         print('Pretraining actor')
-        trials = 1000
+        trials = 2000
         observations = np.random.randn(trials,20,*self.s_dim[1:])
-        prev_actions = np.random.randn(trials,20,*self.s_dim[1:])
-        Y = gain*observations[:,-self.opt_length:]
+        prev_actions = np.random.randn(trials,20,*self.a_dim[1:])
+        Y = gain*observations[:,-self.opt_length:,:,:,0,np.newaxis]
         self.actor_model.compile(optimizer='adam',loss='mse')
-        self.actor_model.fit([observations,prev_actions],Y,batch_size=8,epochs=1)
+        self.actor_model.fit([observations,prev_actions],Y,batch_size=4,epochs=1)
         self.hard_update_target_network()
         self.update_stateful_network()
 

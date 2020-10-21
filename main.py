@@ -14,8 +14,8 @@ np.random.seed(12345)
 def reward_function(strehl,contrast,modal_res=None):
     #NOTE: Scaling the reward also scales the actor gradient so change the learning rate accordingly!
     #reward = np.log(strehl/(contrast/1e-5))
-    #reward = np.log(strehl)
-    reward = -(modal_res)**2
+    reward = np.log(strehl)
+    #reward = -(modal_res)**2
     #reward = -1*np.log10(contrast/1e-4)
     #reward = np.log10(vapp_strehl/(contrast/1e-5))
     #reward = -1*np.sqrt(np.mean(centers**2))
@@ -28,8 +28,8 @@ env_params['D'] = 4  #Diameter of simulated telescope
 env_params['wavelength'] = 0.658e-6   #Wavelength (m) of monochromatic source
 #env_params['wavelength'] = 0.532e-6   #Wavelength (m) of monochromatic source
 env_params['reward_function'] = reward_function    #Reward function
-env_params['pupil_pixels'] = 256 #Number of pixels in pupil_plane
-env_params['num_iterations'] = 1000  #Number of iterations per episode
+env_params['pupil_pixels'] = 128  #Number of pixels in pupil_plane
+env_params['num_iterations'] = 200  #Number of iterations per episode
 env_params['show_image'] = False
 #Visualize wavefronts for debugging of simulations, this is too slow for real training
 env_params['verbosity'] = True      #Print progress
@@ -40,8 +40,8 @@ env_params['num_photons'] = np.inf #Number of photons in incoming beam for addin
 env_params['wfs_error'] = 0.
 env_params['closed_loop_freq'] = 1000   #Frequency (Hz) to run the correction
 #env_params['closed_loop_freq'] = 1380   #Frequency (Hz) to run the correction
-env_params['servo_lag'] = 2.3/env_params['closed_loop_freq']
-env_params['temp_oversampling'] = 5
+env_params['servo_lag'] = 0/env_params['closed_loop_freq']
+env_params['temp_oversampling'] = 1
 
 env_params['turbulence_mode'] = 'atmosphere'
 #Turbulence mode, options:
@@ -81,7 +81,7 @@ env = AO_env(env_params)
 #--------------Hyperparameters of networks------------
 #Architectures of networks can be changed in ddpg/actor.py and ddpg/critic.py.
 params = dict()
-params['actor_lr'] = 1e-5       #Learning rate for the actor
+params['actor_lr'] = 3e-5       #Learning rate for the actor
 params['actor_lr_decay'] = np.exp(np.log(0.5)/500.)
 
 params['critic_lr'] = 1e-3      #Learning rate for the critic
@@ -89,9 +89,9 @@ params['critic_lr_decay'] = np.exp(np.log(0.5)/500.)
 
 params['tau'] = 3e-3      #Update parameter for the target networks: Q' = (1-tau)Q' + tau Q 
 params['actor_grad_clip'] = 1.   #Clipping of the gradient for updating the actor to avoid large changes
-params['use_stateful_actor'] = True
+params['use_stateful_actor'] = False
 params['pretrain_actor'] = True
-params['pretrain_gain'] = 0.5
+params['pretrain_gain'] = 0.3
 #Wether to use a stateful actor as a controller. (https://fairyonice.github.io/Stateful-LSTM-model-training-in-Keras.html explains the difference)
 #If True, the hidden state is preserved during an episode and only the most recent observation is propagated through the LSTM.
 #If False, the input to the actor is a fixed number of timesteps with the hidden state initialized to zero.
@@ -100,21 +100,21 @@ params['pretrain_gain'] = 0.5
 #    -> solve it with variable length training input or longer sequences?
 
 #--------------RL algorithm hyperparameters-----------
-params['gamma'] = 0.95 #Discount factor for expected future rewards
-params['reward_type'] = 'modal'
+params['gamma'] = 0. #Discount factor for expected future rewards
+params['reward_type'] = 'focal'
 params['buffer_size'] = 100 #Maximum number of episodes to save in the replay buffer
-params['minibatch_size'] = 4 #Batch size for training critic and actor
-params['num_training_batches'] = 300  #Number of batches to train on every episode
-params['optimization_length'] = 20 #Size of the history/number of steps to use in the BPTT
-params['initialization_length'] = 10
+params['minibatch_size'] = 1 #Batch size for training critic and actor
+params['num_training_batches'] = 200  #Number of batches to train on every episode
+params['optimization_length'] = 2 #Size of the history/number of steps to use in the BPTT
+params['initialization_length'] = 1
 params['trajectory_length'] = 1     #Number of steps to use observed rewards instead of bootstrapping with target critic.
 #This does not work properly at ends op episodes and should be 1.
 
-params['warmup'] = 5
-params['actor_warmup'] = 5
+params['warmup'] = 0
+params['actor_warmup'] = 3
 params['action_scaling'] = 3     #Maximum possible action
 params['use_integrator'] = False
-params['integrator_gain'] = 0.7
+params['integrator_gain'] = 0.5
 #Probability of randomly using integrator for an iteration to fill the replay buffer with 'good' experience.
 #This can be used to improve training stability. 
 #Gain of the integrator is defaulted to 0.3 and can be set in ddpg/ddpg_agent.py
@@ -123,16 +123,16 @@ params['integrator_gain'] = 0.7
 params['iterations_per_episode'] = env_params['num_iterations']
 
 #-------------Exploration noise parameters----------
-params['start_noise'] = 0.3 #standard deviation of the random action noise
+params['start_noise'] = 0.1 #standard deviation of the random action noise
 #params['noise_type'] = 'gaussian'       #Action noise type: gaussian or ou
 params['theta_noise'] = 0.8             #Only used for ou noise
-params['noise_decay'] = np.exp(np.log(0.5)/40.)            #noise decay factor
+params['noise_decay'] = np.exp(np.log(0.5)/1000.)            #noise decay factor
 params['noise_type'] = 'action'    #wether to use action or parameter space noise for exploration
 
 #---------------Save/load parameters-------------------
 params['max_episodes']= 1000            #Number of episodes to train for
 
-params['savename'] = "fully_modal"
+params['savename'] = "fully_modal_linear"
 #params['savename'] = "test"
 
 #The actor will be saved to ./models/{savename}_{episode}_actor.hdf5 
@@ -158,5 +158,5 @@ with open('results/logs/{0}_config.csv'.format(params['savename']), 'w', newline
 
 if __name__=='__main__':
     DDPG = DDPG_agent(env,params)
-    DDPG.train(run_async=False)
-    #DDPG.train(run_async=not env_params['show_image'])
+    #DDPG.train(run_async=True)
+    DDPG.train(run_async=not env_params['show_image'])

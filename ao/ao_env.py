@@ -67,14 +67,14 @@ class AO_env():
         x = np.linspace(-self.oversize_pupil,self.oversize_pupil,self.num_act)
         XX, YY = np.meshgrid(x,-1*x)
         r_grid = np.sqrt(XX**2+YY**2)
-        self.actuator_mask = (r_grid<=1.06).ravel()
+        self.actuator_mask = (r_grid<=1.).ravel()
 
         self.A = dm_modes.transformation_matrix
         masked_A = np.asarray(self.A.todense())
         #masked_A = np.asarray(self.A.todense())*np.asarray(self.actuator_mask).ravel()
         A_in_ap = (masked_A.T*np.asarray(self.aperture)).T
         #self.A_inv = np.linalg.pinv(A_in_ap,rcond=8e-2) 
-        self.A_inv = inverse_tikhonov(A_in_ap,rcond=1e-1)
+        self.A_inv = inverse_tikhonov(A_in_ap,rcond=2e-1)
         #self.A_inv = np.linalg.pinv(A_in_ap,rcond=9e-2)
         #self.A_inv = np.linalg.pinv(self.A.todense(),rcond=1e-1)
         self.num_modes = self.A.shape[1]
@@ -113,6 +113,7 @@ class AO_env():
         self.iteration += 1
         if not action is None:
             action = action.ravel()
+            action -= np.mean(action)
             self.action_wait_list.append((self.t-1./(2*self.closed_loop_freq),action.ravel()))
         
         wfs_phase = np.zeros_like(self.dm_phase)
@@ -172,7 +173,7 @@ class AO_env():
         r = self.reward_function(self.strehl,self.contrast,s)
         terminate = False
         if self.verbosity: print(int(self.t*self.closed_loop_freq),': Reward: {0:.3f}, Strehl: {1:.3f}, \
-                Contrast: {2:.3e}'.format(np.sum(r),self.strehl,self.contrast),end='\r')
+                Contrast: {2:.3e}'.format(np.mean(r),self.strehl,self.contrast),end='\r')
 
         if self.show_image:
             plt.figure(1,figsize=(12,8))

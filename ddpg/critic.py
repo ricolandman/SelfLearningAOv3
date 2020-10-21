@@ -68,17 +68,20 @@ class Critic(object):
         action = Input(shape=self.a_dim)
         
         x = Concatenate()([observations,prev_actions])
-        x = ConvLSTM2D(8,(1,1),strides=1,padding='same',unit_forget_bias=True,return_sequences=True)(x)
+        #x = observations
+        #x = ConvLSTM2D(8,(1,1),strides=1,padding='same',unit_forget_bias=True,return_sequences=True)(x)
         x = Lambda(lambda y: y[:,self.init_length:,:,:])(x)
         #        output_shape=self.a_dim)(x)
         x = Concatenate()([x,action])
         #x = BatchNormalization()(x)
-        x = TimeDistributed(Conv2D(16,(1,1),strides=1,padding='same',activation='relu'))(x)
+        x = TimeDistributed(Conv2D(16,(1,1),strides=2,padding='same',activation='relu'))(x)
+        x = TimeDistributed(Conv2D(16,(1,1),strides=2,padding='same',activation='relu'))(x)
         #x = BatchNormalization()(x)
-        x = TimeDistributed(Conv2D(4,(1,1),strides=1,padding='same',activation='relu'))(x)
+        #x = TimeDistributed(Conv2D(4,(1,1),strides=1,padding='same',activation='relu'))(x)
         #x = TimeDistributed(BatchNormalization())(x)
         if len(self.q_dim)>2:
-            value = TimeDistributed(Conv2D(1,(1,1),strides=1,padding='same',activation='relu'))(x)
+            value = TimeDistributed(Conv2D(1,(1,1),strides=1,padding='same',
+                        kernel_initializer=RandomUniform(-3e-3,3e-3)))(x)
         else:
             x = TimeDistributed(Flatten())(x)
             value = TimeDistributed(Dense(1,kernel_initializer=RandomUniform(-3e-3,3e-3),kernel_regularizer=l2(1e-5)))(x)

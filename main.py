@@ -14,8 +14,8 @@ np.random.seed(12345)
 def reward_function(strehl,contrast,modal_res=None):
     #NOTE: Scaling the reward also scales the actor gradient so change the learning rate accordingly!
     #reward = np.log(strehl/(contrast/1e-5))
-    #reward = np.log(strehl)
-    reward = -(modal_res)**2
+    reward = np.log(strehl)
+    #reward = -(modal_res)**2
     #reward = -1*np.log10(contrast/1e-4)
     #reward = np.log10(vapp_strehl/(contrast/1e-5))
     #reward = -1*np.sqrt(np.mean(centers**2))
@@ -28,7 +28,7 @@ env_params['D'] = 4  #Diameter of simulated telescope
 env_params['wavelength'] = 0.658e-6   #Wavelength (m) of monochromatic source
 #env_params['wavelength'] = 0.532e-6   #Wavelength (m) of monochromatic source
 env_params['reward_function'] = reward_function    #Reward function
-env_params['pupil_pixels'] = 256 #Number of pixels in pupil_plane
+env_params['pupil_pixels'] = 128 #Number of pixels in pupil_plane
 env_params['num_iterations'] = 1000  #Number of iterations per episode
 env_params['show_image'] = False
 #Visualize wavefronts for debugging of simulations, this is too slow for real training
@@ -81,11 +81,11 @@ env = AO_env(env_params)
 #--------------Hyperparameters of networks------------
 #Architectures of networks can be changed in ddpg/actor.py and ddpg/critic.py.
 params = dict()
-params['actor_lr'] = 1e-5       #Learning rate for the actor
+params['actor_lr'] = 3e-6       #Learning rate for the actor
 params['actor_lr_decay'] = np.exp(np.log(0.5)/500.)
 
 params['critic_lr'] = 1e-3      #Learning rate for the critic
-params['critic_lr_decay'] = np.exp(np.log(0.5)/500.)
+params['critic_lr_decay'] = np.exp(np.log(0.5)/100.)
 
 params['tau'] = 3e-3      #Update parameter for the target networks: Q' = (1-tau)Q' + tau Q 
 params['actor_grad_clip'] = 1.   #Clipping of the gradient for updating the actor to avoid large changes
@@ -103,15 +103,15 @@ params['pretrain_gain'] = 0.5
 params['gamma'] = 0.95 #Discount factor for expected future rewards
 params['reward_type'] = 'modal'
 params['buffer_size'] = 100 #Maximum number of episodes to save in the replay buffer
-params['minibatch_size'] = 4 #Batch size for training critic and actor
-params['num_training_batches'] = 300  #Number of batches to train on every episode
+params['minibatch_size'] = 1 #Batch size for training critic and actor
+params['num_training_batches'] = 1000  #Number of batches to train on every episode
 params['optimization_length'] = 20 #Size of the history/number of steps to use in the BPTT
 params['initialization_length'] = 10
 params['trajectory_length'] = 1     #Number of steps to use observed rewards instead of bootstrapping with target critic.
 #This does not work properly at ends op episodes and should be 1.
 
-params['warmup'] = 5
-params['actor_warmup'] = 5
+params['warmup'] = 0
+params['actor_warmup'] = 0
 params['action_scaling'] = 3     #Maximum possible action
 params['use_integrator'] = False
 params['integrator_gain'] = 0.7
@@ -123,7 +123,7 @@ params['integrator_gain'] = 0.7
 params['iterations_per_episode'] = env_params['num_iterations']
 
 #-------------Exploration noise parameters----------
-params['start_noise'] = 0.3 #standard deviation of the random action noise
+params['start_noise'] = 0.2 #standard deviation of the random action noise
 #params['noise_type'] = 'gaussian'       #Action noise type: gaussian or ou
 params['theta_noise'] = 0.8             #Only used for ou noise
 params['noise_decay'] = np.exp(np.log(0.5)/40.)            #noise decay factor

@@ -87,7 +87,7 @@ class DataCollector():
                 self.h_a.append(a)
                 self.h_r.append(r)
 
-                ep_reward += np.sum(r)
+                ep_reward += np.mean(r)/num_iterations
                 self.strehls.append(self.env.strehl)
                 self.contrasts.append(self.env.contrast)
             
@@ -101,7 +101,7 @@ class DataCollector():
             end_time = time.time()
             print('| Average Strehl: {0:.3f} | Total Contrast: {1:.2e} | Total reward: {2:.1f} | Time: {3:.2f} s '\
                     .format(average_strehl,average_contrast,np.sum(ep_reward),end_time-start_time))
-        return self.replay_buffer,average_strehl,average_contrast
+        return self.replay_buffer,average_strehl,average_contrast,ep_reward
 
 class Trainer():
     def __init__(self,actor,critic,batch_size,opt_length,init_length):
@@ -127,8 +127,9 @@ class Trainer():
                     self.train_actor()
             self.actor.update_stateful_network()
         end_time = time.time()
-        print(f'Trained on {n_iter} batches in {end_time-start_time:.1f} seconds | Critic MSE: {np.mean(np.array(self.mse)):.5f}')
-        return self.actor
+        critic_loss = np.mean(np.array(self.mse))
+        print(f'Trained on {n_iter} batches in {end_time-start_time:.1f} seconds | Critic MSE: {critic_loss:.5f}')
+        return self.actor, critic_loss
     
     def sample_batch(self,replay_buffer):
         #Samples a batch (s,a,r,s') from the replay buffer
@@ -140,7 +141,10 @@ class Trainer():
         target_a = self.actor.predict_target(self.s2_batch)
         target_q = self.critic.predict_target(self.s2_batch,target_a)
         #target_q = self.critic.predict_target(self.s2_batch,target_a+self.noise*np.random.randn(*target_a.shape))
-        self.r_batch = self.r_batch[:,-self.opt_length:,np.newaxis]
+        if self.r_batch.ndim<3:
+            self.r_batch = self.r_batch[:,-self.opt_length:,np.newaxis]
+        else:
+            self.r_batch = self.r_batch[:,-self.opt_length:]
 
         #Calculate critic targets
         y = self.r_batch + self.critic.gamma*target_q
@@ -162,14 +166,14 @@ class Trainer():
         #Trains the actor
         a_outs = self.actor.predict(self.s_batch)
         #Get critic gradient
-        grads = self.critic.action_gradients(self.s_batch, a_outs)
+        grads = self.critic.action_gradients(self.s_batch, a_outs)[0]
         
         #if self.make_debug_plots:
         #    self.a_outs.append(a_outs)
         #    self.grads.append(grads[0])
 
         #Update actor
-        self.actor.train(self.s_batch, grads[0])
+        self.actor.train(self.s_batch, grads)
         self.actor.update_target_network()
         #self.actor.update_stateful_network()
 
@@ -266,13 +270,18 @@ class DDPG_agent():
         trainer = Trainer(self.actor,self.critic,self.minibatch_size,self.opt_length,self.init_length)
 
         self.strehls = []
+        self.rewards = []
+        self.critic_mse = []
         self.contrasts = []
         for episode in range(self.max_episodes):
 
             #Test policy without noise once in a while
             if episode%10==0 and episode>1:
                 print('Evaluating current policy without noise...')
-                self.replay_buffer,strehl,contrast = data_collector.run(self.sess,self.actor,0,self.num_iterations)
+                self.replay_buffer,strehl,contrast,reward = data_collector.run(self.sess,self.actor,0,self.num_iterations)
+                self.strehls.append(strehl)
+                self.contrasts.append(contrast)
+                #self.rewards.append(reward)
                 if self.make_debug_plots:
                     self.debug_plots()
 
@@ -289,21 +298,24 @@ class DDPG_agent():
                         f2 = executor.submit(trainer.train, self.sess,self.replay_buffer,\
                                 self.num_training_batches,self.noise,train_actor)
                 
-                    self.replay_buffer,strehl,contrast = f1.result()
+                    self.replay_buffer,strehl,contrast,reward = f1.result()
                     if episode>self.warmup:
-                        self.actor = f2.result()
+                        self.actor,critic_loss = f2.result()
+                        self.critic_mse.append(critic_loss)
                 
 
             else:
                 print('\n Episode:',episode)
                 #Collect data
-                self.replay_buffer,strehl,contrast = data_collector.run(self.sess,self.actor,self.noise,self.num_iterations)
+                self.replay_buffer,strehl,contrast,reward = data_collector.run(self.sess,self.actor,self.noise,self.num_iterations)
                 #Train actor and critic
                 if episode>self.warmup:
-                    self.actor = trainer.train(self.sess,self.replay_buffer,self.num_training_batches,self.noise)
+                    self.actor, critic_loss = trainer.train(self.sess,self.replay_buffer,self.num_training_batches,self.noise)
+                    self.critic_mse.append(critic_loss)
             #Decay noise
             self.strehls.append(strehl)
             self.contrasts.append(contrast)
+            self.rewards.append(reward)
             self.noise *= self.noise_decay
 
             #Save
@@ -332,32 +344,39 @@ class DDPG_agent():
 
     def debug_plots(self):
         print('Making debug plots')
-        plt.figure(1,figsize=(12,8))
+        plt.figure(1,figsize=(15,8))
         plt.clf()
-        plt.subplot(2,3,1)
+        plt.subplot(2,4,1)
         plt.title('Strehl')
         plt.plot(self.strehls,color='orangered',label='Strehl')
-        plt.subplot(2,3,2)
+        plt.subplot(2,4,2)
         plt.plot(self.contrasts,color='darkblue',label='Contrast')
         plt.yscale('log')
         plt.title('Contrast')
-        plt.subplot(2,3,3)
+        plt.subplot(2,4,3)
         plt.title('Focal plane image')
         plt.imshow(np.log10(self.env.science_coro_image.reshape(self.env.focal_pixels,\
             self.env.focal_pixels)/self.env.science_image.max()),vmin=-4,vmax=-1,cmap='afmhot')
         plt.colorbar()
-        plt.subplot(2,3,4)
+        plt.subplot(2,4,4)
         plt.title('Wavefront variance')
         plt.imshow(np.sqrt(np.mean(self.env.phase_screens**2,axis=0)),cmap='Reds')
         plt.colorbar()
-        plt.subplot(2,3,5)
+        plt.subplot(2,4,5)
         plt.title('Mean residual phase screen')
         plt.imshow(np.mean(self.env.phase_screens,axis=0),cmap='bwr')
         plt.colorbar()
-        plt.subplot(2,3,6)
+        plt.subplot(2,4,6)
         plt.title('Mean DM shape')
         plt.imshow(np.mean(self.env.dm_shapes,axis=0),cmap='bwr')
         plt.colorbar()
+        plt.subplot(2,4,7)
+        plt.title('Reward')
+        plt.plot(range(len(self.rewards)),self.rewards)
+        plt.subplot(2,4,8)
+        plt.title('Critic loss')
+        plt.plot(range(len(self.critic_mse)),self.critic_mse)
+
         plt.tight_layout()
         plt.savefig('results/plots/debug_plots_{0}.png'.format(self.savename))
         plt.draw()

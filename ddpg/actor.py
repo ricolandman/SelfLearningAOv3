@@ -77,8 +77,10 @@ class Actor(object):
         #self.clipped_actor_gradients[-1] -= 
 
         #Define optimization op
+        #self.optimize = tf.train.AdamOptimizer(self.learning_rate).\
+        #    apply_gradients(zip(self.reg_actor_gradients,self.network_params))
         self.optimize = tf.train.AdamOptimizer(self.learning_rate).\
-            apply_gradients(zip(self.reg_actor_gradients,self.network_params))
+            apply_gradients(zip(self.clipped_actor_gradients,self.network_params))
 
         self.num_trainable_vars = len(
             self.network_params) + len(self.target_network_params)
@@ -100,9 +102,9 @@ class Actor(object):
         if not stateful:
             x = Lambda(lambda y: y[:,-self.opt_length:,:,:])(x)
 
-        x = TimeDistributed(Conv2D(8,(1,1),strides=1,padding='same',activation='relu'))(x)
+        #x = TimeDistributed(Conv2D(8,(1,1),strides=1,padding='same',activation='relu'))(x)
         x = TimeDistributed(Conv2D(self.a_dim[-1],(1,1),strides=1,padding='same',\
-                   kernel_initializer=RandomUniform(-3e-3,3e-3),activation='tanh',\
+                   kernel_initializer=RandomUniform(-3e-3,3e-3),activation='linear',\
                    use_bias=False))(x)
         #x = TimeDistributed(LocallyConnected2D(self.a_dim[-1],(1,1),strides=1,\
         #        activation='tanh',use_bias=False))(x)
@@ -157,7 +159,8 @@ class Actor(object):
         #    self.stateful_observations:inputs[0],
         #    self.stateful_prev_actions:inputs[1]
         #})
-        return self.stateful_model.predict(inputs)[0,-1]
+        a = self.stateful_model.predict(inputs)
+        return a[0,-1]
 
     def predict_target(self, inputs):
         #Returns the action of the target model for the given state

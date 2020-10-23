@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 #import asdf
 import concurrent.futures
+from hcipy import imshow_field
 
 class DataCollector():
     def __init__(self,env,replay_buffer,action_dim,noise_type,use_integrator=False,integrator_gain=None,\
@@ -92,10 +93,8 @@ class DataCollector():
                 self.contrasts.append(self.env.contrast)
             
             self.replay_buffer.add(np.array(self.h_o),np.array(self.h_a),np.array(self.h_r))
-            average_strehl = np.mean(np.array(self.strehls)[50:])
-            #print(average_strehl)
-            #average_strehl = self.env.science_image.max()
-            average_contrast = np.mean(np.array(self.contrasts)[50:])
+            average_strehl = self.env.science_image.max()
+            average_contrast = np.std(self.env.science_coro_image[self.env.dark_zone])/average_strehl
             #self.average_strehls.append(np.mean(np.array(strehls)))
             #self.total_reward.append(np.sum(ep_reward))
             end_time = time.time()
@@ -355,8 +354,9 @@ class DDPG_agent():
         plt.title('Contrast')
         plt.subplot(2,4,3)
         plt.title('Focal plane image')
-        plt.imshow(np.log10(self.env.science_coro_image.reshape(self.env.focal_pixels,\
-            self.env.focal_pixels)/self.env.science_image.max()),vmin=-4,vmax=-1,cmap='afmhot')
+        #plt.imshow(np.log10(self.env.science_coro_image[self.env.dark_zone])/self.env.science_image.max(),vmin=-5,vmax=-1,cmap='afmhot')
+        plt.imshow(np.log10((self.env.science_coro_image).reshape(self.env.focal_pixels,\
+            self.env.focal_pixels)/self.env.science_image.max()),vmin=-5,vmax=-1,cmap='afmhot')
         plt.colorbar()
         plt.subplot(2,4,4)
         plt.title('Wavefront variance')

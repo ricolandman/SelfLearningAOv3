@@ -96,15 +96,15 @@ class Actor(object):
             prev_actions = Input(self.a_dim)
         x = Concatenate()([observations,prev_actions])
         #x = BatchNormalization()(x)
-        x = ConvLSTM2D(8,(1,1),strides=1,padding='same',unit_forget_bias=True,stateful=stateful,\
+        x = ConvLSTM2D(8,(3,3),strides=1,padding='same',unit_forget_bias=True,stateful=stateful,\
                 return_sequences=True)(x)
         #x = TimeDistributed(Conv2D(8,(3,3),strides=1,padding='same',activation='tanh'))(x)
         if not stateful:
             x = Lambda(lambda y: y[:,-self.opt_length:,:,:])(x)
 
-        #x = TimeDistributed(Conv2D(8,(1,1),strides=1,padding='same',activation='relu'))(x)
-        x = TimeDistributed(Conv2D(self.a_dim[-1],(1,1),strides=1,padding='same',\
-                   kernel_initializer=RandomUniform(-3e-3,3e-3),activation='linear',\
+        x = TimeDistributed(Conv2D(8,(3,3),strides=1,padding='same',activation='relu'))(x)
+        x = TimeDistributed(Conv2D(self.a_dim[-1],(3,3),strides=1,padding='same',\
+                   kernel_initializer=RandomUniform(-3e-3,3e-3),activation='tanh',\
                    use_bias=False))(x)
         #x = TimeDistributed(LocallyConnected2D(self.a_dim[-1],(1,1),strides=1,\
         #        activation='tanh',use_bias=False))(x)

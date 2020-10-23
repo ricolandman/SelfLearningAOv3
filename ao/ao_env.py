@@ -27,8 +27,8 @@ class AO_env():
         self.closed_loop_freq = env_params['closed_loop_freq']
         self.temp_oversampling = env_params['temp_oversampling']
         self.wfs_error = env_params['wfs_error']
-        self.leakage = 0.001
-        self.oversize_pupil = 1.05
+        self.leakage = 0.00
+        self.oversize_pupil = 1.03
         self.dt = 1./(self.temp_oversampling*self.closed_loop_freq)
 
         #--------------Initialize pupil plane and non-aberrated wavefront------------------
@@ -74,22 +74,25 @@ class AO_env():
         #masked_A = np.asarray(self.A.todense())*np.asarray(self.actuator_mask).ravel()
         A_in_ap = (masked_A.T*np.asarray(self.aperture)).T
         #self.A_inv = np.linalg.pinv(A_in_ap,rcond=8e-2) 
-        self.A_inv = inverse_tikhonov(A_in_ap,rcond=2e-1)
+        self.A_inv = inverse_tikhonov(A_in_ap,rcond=1e-1)
         #self.A_inv = np.linalg.pinv(A_in_ap,rcond=9e-2)
         #self.A_inv = np.linalg.pinv(self.A.todense(),rcond=1e-1)
         self.num_modes = self.A.shape[1]
 
 
         #------------------------Create Coronagraph---------------------
-        contrast_level = 1e-5
-        self.dark_zone = (circular_aperture(16*self.wavelength/self.D)(focal_plane)).astype(bool)\
-                        *(focal_plane.x>1.22*self.wavelength/self.D)#*focal_plane.delta[0])
+        num_act_eff = self.num_act/self.oversize_pupil
+        max_k = num_act_eff/2.4
+        self.dark_zone = (np.abs(focal_plane.x)<(max_k*(self.wavelength/self.D)))*\
+                        (np.abs(focal_plane.y)<(max_k*(self.wavelength/self.D)))
 
-        contrast = focal_plane.ones()
-        contrast[self.dark_zone] = contrast_level
+        #plt.imshow(self.dark_zone.reshape(self.focal_pixels,self.focal_pixels))
+        #plt.show()
+        #contrast = focal_plane.ones()
+        #contrast[self.dark_zone] = contrast_level
 
         num_iterations = 100
-        self.vAPP = generate_app_keller(self.input_wf,self.pupil_to_focal,contrast,num_iterations,beta=1)
+        #self.vAPP = generate_app_keller(self.input_wf,self.pupil_to_focal,contrast,num_iterations,beta=1)
         self.coro = PerfectCoronagraph(self.aperture)
         
         #------------------------Create Atmosphere----------------------------
@@ -162,14 +165,14 @@ class AO_env():
         self.strehl = focal_image.max()/self.Inorm
         self.contrast = np.std(coro_image[self.dark_zone])/self.Inorm
 
-        if self.iteration>50:
+        if self.iteration>100:
             #self.science_image += coro_image.reshape(self.focal_pixels,self.focal_pixels)
             #self.science_image += focal_image/(self.Inorm*(self.num_iterations-51))
-            self.science_image += focal_image/(self.Inorm*(self.num_iterations-51))
-            self.science_coro_image += coro_image/(self.Inorm*(self.num_iterations-51))
+            self.science_image += focal_image/(self.Inorm*(self.num_iterations-101))
+            self.science_coro_image += coro_image/(self.Inorm*(self.num_iterations-101))
             #self.science_camera.integrate(focal_image,self.dt/(self.num_iterations-51))
-            self.phase_screens[self.iteration-51] = (self.res_phase*self.aperture).reshape(self.pupil_pixels,self.pupil_pixels)
-            self.dm_shapes[self.iteration-51] = (self.dm_phase*self.aperture).reshape(self.pupil_pixels,self.pupil_pixels)
+            self.phase_screens[self.iteration-101] = (self.res_phase*self.aperture).reshape(self.pupil_pixels,self.pupil_pixels)
+            self.dm_shapes[self.iteration-101] = (self.dm_phase*self.aperture).reshape(self.pupil_pixels,self.pupil_pixels)
         r = self.reward_function(self.strehl,self.contrast,s)
         terminate = False
         if self.verbosity: print(int(self.t*self.closed_loop_freq),': Reward: {0:.3f}, Strehl: {1:.3f}, \

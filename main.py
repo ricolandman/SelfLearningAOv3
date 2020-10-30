@@ -14,8 +14,8 @@ np.random.seed(12345)
 def reward_function(strehl,contrast,modal_res=None):
     #NOTE: Scaling the reward also scales the actor gradient so change the learning rate accordingly!
     #reward = np.log(strehl/(contrast/1e-5))
-    #reward = np.log(strehl)
-    reward = -(modal_res)**2
+    reward = np.log(strehl)
+    #reward = -(modal_res)**2
     #reward = -1*np.log10(contrast/1e-4)
     #reward = np.log10(vapp_strehl/(contrast/1e-5))
     #reward = -1*np.sqrt(np.mean(centers**2))
@@ -30,7 +30,7 @@ env_params['wavelength'] = 1e-6   #Wavelength (m) of monochromatic source
 #env_params['wavelength'] = 0.532e-6   #Wavelength (m) of monochromatic source
 env_params['reward_function'] = reward_function    #Reward function
 env_params['pupil_pixels'] = 128 #Number of pixels in pupil_plane
-env_params['num_iterations'] = 200  #Number of iterations per episode
+env_params['num_iterations'] = 1000  #Number of iterations per episode
 env_params['show_image'] = False
 #Visualize wavefronts for debugging of simulations, this is too slow for real training
 env_params['verbosity'] = True      #Print progress
@@ -124,6 +124,7 @@ params['integrator_gain'] = 0.6
 params['iterations_per_episode'] = env_params['num_iterations']
 
 #-------------Exploration noise parameters----------
+
 params['start_noise'] = 0. #standard deviation of the random action noise
 #params['noise_type'] = 'gaussian'       #Action noise type: gaussian or ou
 params['theta_noise'] = 0.8             #Only used for ou noise

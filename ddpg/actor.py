@@ -8,9 +8,7 @@ from tensorflow.python.keras.models import Model,load_model
 from tensorflow.python.keras.layers import Input,Conv2D,LocallyConnected2D,UpSampling2D,TimeDistributed,ZeroPadding2D
 from tensorflow.python.keras.initializers import RandomUniform
 from tensorflow.python.keras.regularizers import l2
-from custom_convgru import CustomConvGRU
-#from custom_convrnn import CustomConvRNN
-from custom_convmgu import CustomConvMGU
+from ddpg.custom_layers import *
 
 class Actor(object):
     def __init__(self, sess, state_dim, action_dim, learning_rate=0, tau=0, batch_size=1,

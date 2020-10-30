@@ -2,14 +2,13 @@ import tensorflow as tf
 import time
 import time
 import numpy as np
-from keras.models import Sequential
-from keras import backend as K
-from keras.layers import Dense, Concatenate, BatchNormalization, Lambda, Flatten,LSTM,ConvLSTM2D
-from keras.activations import tanh
-from keras.models import Model,load_model
-from keras.layers import Input,Conv2D,LocallyConnected2D,UpSampling2D,TimeDistributed,ZeroPadding2D
-from keras.initializers import RandomUniform
-from keras.regularizers import l2
+from tensorflow.python.keras.layers import Dense, Concatenate, BatchNormalization, Lambda, Flatten, ConvLSTM2D
+from tensorflow.python.keras.activations import tanh
+from tensorflow.python.keras.models import Model,load_model
+from tensorflow.python.keras.layers import Input,Conv2D,LocallyConnected2D,UpSampling2D,TimeDistributed,ZeroPadding2D
+from tensorflow.python.keras.initializers import RandomUniform
+from tensorflow.python.keras.regularizers import l2
+from ddpg.custom_layers import *
 
 class Actor(object):
     def __init__(self, sess, state_dim, action_dim, learning_rate=0, tau=0, batch_size=1,
@@ -96,16 +95,18 @@ class Actor(object):
             prev_actions = Input(self.a_dim)
         x = Concatenate()([observations,prev_actions])
         #x = BatchNormalization()(x)
-        x = ConvLSTM2D(8,(1,1),strides=1,padding='same',unit_forget_bias=True,stateful=stateful,\
-                return_sequences=True)(x)
+        #x = ConvLSTM2D(8,(3,3),strides=1,padding='same',unit_forget_bias=True,stateful=stateful,\
+        #        return_sequences=True)(x)
+        x = CustomConvMGU(1,(3,3),strides=1,padding='same',stateful=stateful,return_sequences=True,unit_forget_bias=True,
+                            activation='linear',recurrent_activation='tanh',kernel_initializer=RandomUniform(-3e-3,3e-3))(x)
         #x = TimeDistributed(Conv2D(8,(3,3),strides=1,padding='same',activation='tanh'))(x)
         if not stateful:
             x = Lambda(lambda y: y[:,-self.opt_length:,:,:])(x)
 
-        #x = TimeDistributed(Conv2D(8,(1,1),strides=1,padding='same',activation='relu'))(x)
-        x = TimeDistributed(Conv2D(self.a_dim[-1],(1,1),strides=1,padding='same',\
-                   kernel_initializer=RandomUniform(-3e-3,3e-3),activation='linear',\
-                   use_bias=False))(x)
+        #x = TimeDistributed(Conv2D(8,(3,3),strides=1,padding='same',activation='relu'))(x)
+        #x = TimeDistributed(Conv2D(self.a_dim[-1],(3,3),strides=1,padding='same',\
+        #           kernel_initializer=RandomUniform(-3e-3,3e-3),activation='tanh',\
+        #           use_bias=False))(x)
         #x = TimeDistributed(LocallyConnected2D(self.a_dim[-1],(1,1),strides=1,\
         #        activation='tanh',use_bias=False))(x)
         action = Lambda(lambda y: y*action_scaling)(x)

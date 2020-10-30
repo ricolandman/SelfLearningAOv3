@@ -1,17 +1,15 @@
 import tensorflow as tf
 import numpy as np
-from keras.models import Sequential
-from keras import backend as K
-from keras.layers import Dense, Concatenate, BatchNormalization, Lambda, Flatten,TimeDistributed
-from keras.layers import Conv2D,LocallyConnected2D,UpSampling2D, LSTM, ConvLSTM2D,ZeroPadding2D
-from keras.optimizers import Adam
+from tensorflow.python.keras.layers import Dense, Concatenate, BatchNormalization, Lambda, Flatten,TimeDistributed
+from tensorflow.python.keras.layers import Conv2D,LocallyConnected2D,UpSampling2D, LSTM, ConvLSTM2D,ZeroPadding2D, Input
+from tensorflow.python.keras.optimizers import Adam
 
-from keras.activations import tanh
-from keras.models import Model, load_model
-from keras.layers import Input
-from keras.initializers import RandomUniform
-from keras.losses import mean_squared_error
-from keras.regularizers import l2
+from tensorflow.python.keras.activations import tanh
+from tensorflow.python.keras.models import Model, load_model
+from tensorflow.python.keras.initializers import RandomUniform
+from tensorflow.python.keras.losses import mean_squared_error
+from tensorflow.python.keras.regularizers import l2
+from ddpg.custom_layers import *
 
 
 class Critic(object):
@@ -69,18 +67,18 @@ class Critic(object):
         
         x = Concatenate()([observations,prev_actions])
         #x = observations
-        #x = ConvLSTM2D(8,(1,1),strides=1,padding='same',unit_forget_bias=True,return_sequences=True)(x)
+        x = ConvLSTM2D(16,(3,3),strides=1,padding='same',unit_forget_bias=True,return_sequences=True)(x)
         x = Lambda(lambda y: y[:,self.init_length:,:,:])(x)
         #        output_shape=self.a_dim)(x)
         x = Concatenate()([x,action])
         #x = BatchNormalization()(x)
-        x = TimeDistributed(Conv2D(16,(1,1),strides=2,padding='same',activation='relu'))(x)
-        x = TimeDistributed(Conv2D(16,(1,1),strides=2,padding='same',activation='relu'))(x)
+        x = TimeDistributed(Conv2D(16,(3,3),strides=1,padding='same',activation='relu'))(x)
+        x = TimeDistributed(Conv2D(8,(3,3),strides=1,padding='same',activation='relu'))(x)
         #x = BatchNormalization()(x)
         #x = TimeDistributed(Conv2D(4,(1,1),strides=1,padding='same',activation='relu'))(x)
         #x = TimeDistributed(BatchNormalization())(x)
         if len(self.q_dim)>2:
-            value = TimeDistributed(Conv2D(1,(1,1),strides=1,padding='same',
+            value = TimeDistributed(Conv2D(1,(3,3),strides=1,padding='same',activation='linear',
                         kernel_initializer=RandomUniform(-3e-3,3e-3)))(x)
         else:
             x = TimeDistributed(Flatten())(x)

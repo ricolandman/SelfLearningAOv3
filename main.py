@@ -24,8 +24,9 @@ def reward_function(strehl,contrast,modal_res=None):
     return reward
 
 env_params = dict()
-env_params['D'] = 4  #Diameter of simulated telescope
-env_params['wavelength'] = 0.658e-6   #Wavelength (m) of monochromatic source
+env_params['D'] = 8  #Diameter of simulated telescope
+env_params['wavelength'] = 1e-6   #Wavelength (m) of monochromatic source
+#env_params['wavelength'] = 0.658e-6   #Wavelength (m) of monochromatic source
 #env_params['wavelength'] = 0.532e-6   #Wavelength (m) of monochromatic source
 env_params['reward_function'] = reward_function    #Reward function
 env_params['pupil_pixels'] = 128 #Number of pixels in pupil_plane
@@ -35,7 +36,7 @@ env_params['show_image'] = False
 env_params['verbosity'] = True      #Print progress
 #Time (in iterations) between sensed wavefront and correction of the DM, only integers >0 are supported.
 #Is this realistic? I calculate the Strehl every discrete step and not inbetween.
-env_params['num_airy'] = 16 #Size of focal plane in number of airy rings
+env_params['num_airy'] = 24 #Size of focal plane in number of airy rings
 env_params['num_photons'] = np.inf #Number of photons in incoming beam for adding photon noise
 env_params['wfs_error'] = 0.
 env_params['closed_loop_freq'] = 1000   #Frequency (Hz) to run the correction
@@ -50,16 +51,16 @@ env_params['turbulence_mode'] = 'atmosphere'
 #   atmosphere_random: Two-layered atmospheric turbulence with random wind velocity and angle for every episode
 
 env_params['L0'] = [50]  #Outer scale parameter of simulated atmospheric layer
-env_params['Cn2'] = [Cn_squared_from_fried_parameter(r0=0.2,wavelength=env_params['wavelength'])]
+env_params['Cn2'] = [Cn_squared_from_fried_parameter(r0=0.15,wavelength=env_params['wavelength'])]
 #env_params['Cn2'] = [0.8e-13,1.3e-13]
 env_params['angles'] = [0]
-env_params['velocity'] = [25]  #Wind velocity vector
+env_params['velocity'] = [15]  #Wind velocity vector
 #env_params['velocity'] = [12,30]  #Wind velocity vector
 #env_params['velocity'] = [0,0]  #Wind velocity vector
 #env_params['heights'] = [0,11e3]
 env_params['heights'] = [0]
 
-env_params['num_actuators'] = 25 #Number of actuators of the DM along pupil diameter
+env_params['num_actuators'] = 41#Number of actuators of the DM along pupil diameter
 env_params['N_mla'] = 32 #Number of microlenses in Shack-Hartmann WFS
 
 env_params['control_mode'] = 'modal'
@@ -82,16 +83,16 @@ env = AO_env(env_params)
 #Architectures of networks can be changed in ddpg/actor.py and ddpg/critic.py.
 params = dict()
 params['actor_lr'] = 3e-6       #Learning rate for the actor
-params['actor_lr_decay'] = np.exp(np.log(0.5)/500.)
+params['actor_lr_decay'] = np.exp(np.log(0.5)/50.)
 
 params['critic_lr'] = 1e-3      #Learning rate for the critic
-params['critic_lr_decay'] = np.exp(np.log(0.5)/100.)
+params['critic_lr_decay'] = np.exp(np.log(0.5)/30.)
 
-params['tau'] = 3e-3      #Update parameter for the target networks: Q' = (1-tau)Q' + tau Q 
+params['tau'] = 1e-3      #Update parameter for the target networks: Q' = (1-tau)Q' + tau Q 
 params['actor_grad_clip'] = 1.   #Clipping of the gradient for updating the actor to avoid large changes
 params['use_stateful_actor'] = True
 params['pretrain_actor'] = True
-params['pretrain_gain'] = 0.5
+params['pretrain_gain'] = 0.4
 #Wether to use a stateful actor as a controller. (https://fairyonice.github.io/Stateful-LSTM-model-training-in-Keras.html explains the difference)
 #If True, the hidden state is preserved during an episode and only the most recent observation is propagated through the LSTM.
 #If False, the input to the actor is a fixed number of timesteps with the hidden state initialized to zero.
@@ -102,19 +103,19 @@ params['pretrain_gain'] = 0.5
 #--------------RL algorithm hyperparameters-----------
 params['gamma'] = 0.95 #Discount factor for expected future rewards
 params['reward_type'] = 'modal'
-params['buffer_size'] = 100 #Maximum number of episodes to save in the replay buffer
+params['buffer_size'] = 50 #Maximum number of episodes to save in the replay buffer
 params['minibatch_size'] = 1 #Batch size for training critic and actor
 params['num_training_batches'] = 1000  #Number of batches to train on every episode
-params['optimization_length'] = 20 #Size of the history/number of steps to use in the BPTT
+params['optimization_length'] = 10 #Size of the history/number of steps to use in the BPTT
 params['initialization_length'] = 10
 params['trajectory_length'] = 1     #Number of steps to use observed rewards instead of bootstrapping with target critic.
 #This does not work properly at ends op episodes and should be 1.
 
-params['warmup'] = 0
-params['actor_warmup'] = 0
+params['warmup'] = 3
+params['actor_warmup'] = 3
 params['action_scaling'] = 3     #Maximum possible action
 params['use_integrator'] = False
-params['integrator_gain'] = 0.7
+params['integrator_gain'] = 0.6
 #Probability of randomly using integrator for an iteration to fill the replay buffer with 'good' experience.
 #This can be used to improve training stability. 
 #Gain of the integrator is defaulted to 0.3 and can be set in ddpg/ddpg_agent.py
@@ -123,17 +124,17 @@ params['integrator_gain'] = 0.7
 params['iterations_per_episode'] = env_params['num_iterations']
 
 #-------------Exploration noise parameters----------
-params['start_noise'] = 0.2 #standard deviation of the random action noise
+
+params['start_noise'] = 0. #standard deviation of the random action noise
 #params['noise_type'] = 'gaussian'       #Action noise type: gaussian or ou
 params['theta_noise'] = 0.8             #Only used for ou noise
-params['noise_decay'] = np.exp(np.log(0.5)/40.)            #noise decay factor
+params['noise_decay'] = np.exp(np.log(0.5)/10)            #noise decay factor
 params['noise_type'] = 'action'    #wether to use action or parameter space noise for exploration
 
 #---------------Save/load parameters-------------------
 params['max_episodes']= 1000            #Number of episodes to train for
 
-params['savename'] = "fully_modal"
-#params['savename'] = "test"
+params['savename'] = "newcond_large_meansubtract_morecriticlstm_8"
 
 #The actor will be saved to ./models/{savename}_{episode}_actor.hdf5 
 #The critic will be saved to ./models/{savename}_{episode}_critic.hdf5 

@@ -51,10 +51,10 @@ env_params['turbulence_mode'] = 'atmosphere'
 #   atmosphere_random: Two-layered atmospheric turbulence with random wind velocity and angle for every episode
 
 env_params['L0'] = [50]  #Outer scale parameter of simulated atmospheric layer
-env_params['Cn2'] = [Cn_squared_from_fried_parameter(r0=0.2,wavelength=env_params['wavelength'])]
+env_params['Cn2'] = [Cn_squared_from_fried_parameter(r0=0.15,wavelength=env_params['wavelength'])]
 #env_params['Cn2'] = [0.8e-13,1.3e-13]
 env_params['angles'] = [0]
-env_params['velocity'] = [0]  #Wind velocity vector
+env_params['velocity'] = [15]  #Wind velocity vector
 #env_params['velocity'] = [12,30]  #Wind velocity vector
 #env_params['velocity'] = [0,0]  #Wind velocity vector
 #env_params['heights'] = [0,11e3]
@@ -92,7 +92,7 @@ params['tau'] = 1e-3      #Update parameter for the target networks: Q' = (1-tau
 params['actor_grad_clip'] = 1.   #Clipping of the gradient for updating the actor to avoid large changes
 params['use_stateful_actor'] = True
 params['pretrain_actor'] = True
-params['pretrain_gain'] = 0.6
+params['pretrain_gain'] = 0.4
 #Wether to use a stateful actor as a controller. (https://fairyonice.github.io/Stateful-LSTM-model-training-in-Keras.html explains the difference)
 #If True, the hidden state is preserved during an episode and only the most recent observation is propagated through the LSTM.
 #If False, the input to the actor is a fixed number of timesteps with the hidden state initialized to zero.
@@ -114,7 +114,7 @@ params['trajectory_length'] = 1     #Number of steps to use observed rewards ins
 params['warmup'] = 3
 params['actor_warmup'] = 3
 params['action_scaling'] = 3     #Maximum possible action
-params['use_integrator'] = True
+params['use_integrator'] = False
 params['integrator_gain'] = 0.6
 #Probability of randomly using integrator for an iteration to fill the replay buffer with 'good' experience.
 #This can be used to improve training stability. 

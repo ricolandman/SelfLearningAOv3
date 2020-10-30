@@ -2,4 +2,6 @@
 *.png
 *.csv
 *.pyc
+ao/__pycache__
+ddpg/__pycache__
 *__pycache__*

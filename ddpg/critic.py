@@ -1,17 +1,15 @@
 import tensorflow as tf
 import numpy as np
-from keras.models import Sequential
-from keras import backend as K
-from keras.layers import Dense, Concatenate, BatchNormalization, Lambda, Flatten,TimeDistributed
-from keras.layers import Conv2D,LocallyConnected2D,UpSampling2D, LSTM, ConvLSTM2D,ZeroPadding2D
-from keras.optimizers import Adam
+from tensorflow.python.keras.layers import Dense, Concatenate, BatchNormalization, Lambda, Flatten,TimeDistributed
+from tensorflow.python.keras.layers import Conv2D,LocallyConnected2D,UpSampling2D, LSTM, ConvLSTM2D,ZeroPadding2D, Input
+from tensorflow.python.keras.optimizers import Adam
 
-from keras.activations import tanh
-from keras.models import Model, load_model
-from keras.layers import Input
-from keras.initializers import RandomUniform
-from keras.losses import mean_squared_error
-from keras.regularizers import l2
+from tensorflow.python.keras.activations import tanh
+from tensorflow.python.keras.models import Model, load_model
+from tensorflow.python.keras.initializers import RandomUniform
+from tensorflow.python.keras.losses import mean_squared_error
+from tensorflow.python.keras.regularizers import l2
+from ddpg.custom_layers import *
 
 
 class Critic(object):

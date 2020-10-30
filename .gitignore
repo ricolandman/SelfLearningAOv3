@@ -1,3 +1,5 @@
 *.hdf5
 *.png
 *.csv
+*.pyc
+*__pycache__*

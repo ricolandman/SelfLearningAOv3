@@ -13,36 +13,30 @@ np.random.seed(12345)
 
 def reward_function(strehl,contrast,modal_res=None):
     #NOTE: Scaling the reward also scales the actor gradient so change the learning rate accordingly!
-    #reward = np.log(strehl/(contrast/1e-5))
-    reward = np.log(strehl)
-    #reward = -(modal_res)**2
-    #reward = -1*np.log10(contrast/1e-4)
-    #reward = np.log10(vapp_strehl/(contrast/1e-5))
-    #reward = -1*np.sqrt(np.mean(centers**2))
-    #reward = strehl
-    #reward = -1*np.log(centers**2)
+    #reward = np.log(strehl)
+    reward = -(modal_res)**2
     return reward
 
 env_params = dict()
 env_params['D'] = 8  #Diameter of simulated telescope
-env_params['wavelength'] = 1e-6   #Wavelength (m) of monochromatic source
-#env_params['wavelength'] = 0.658e-6   #Wavelength (m) of monochromatic source
-#env_params['wavelength'] = 0.532e-6   #Wavelength (m) of monochromatic source
+env_params['wavelength_science'] = 1.65e-6   #Wavelength (m)
+env_params['wavelength_sensing'] = 0.7e-6   #Wavelength (m) of monochromatic source
 env_params['reward_function'] = reward_function    #Reward function
-env_params['pupil_pixels'] = 128 #Number of pixels in pupil_plane
+env_params['pupil_pixels'] = 240  #Number of pixels in pupil_plane
 env_params['num_iterations'] = 1000  #Number of iterations per episode
-env_params['show_image'] = False
-#Visualize wavefronts for debugging of simulations, this is too slow for real training
+env_params['burnin_iterations'] = 200  #Number of iterations before integrating science image
+env_params['show_image'] = True #Visualize wavefronts for debugging of simulations, this is too slow for real training
 env_params['verbosity'] = True      #Print progress
-#Time (in iterations) between sensed wavefront and correction of the DM, only integers >0 are supported.
-#Is this realistic? I calculate the Strehl every discrete step and not inbetween.
-env_params['num_airy'] = 24 #Size of focal plane in number of airy rings
+env_params['num_airy'] = 24  #Size of focal plane in number of airy rings
 env_params['num_photons'] = np.inf #Number of photons in incoming beam for adding photon noise
-env_params['wfs_error'] = 0.
-env_params['closed_loop_freq'] = 1000   #Frequency (Hz) to run the correction
+#env_params['wfs_type'] = 'phase'
+env_params['wfs_type'] = 'pyramid'
+env_params['wfs_type'] = 'shack-hartmann'
+env_params['closed_loop_freq'] = 1380   #Frequency (Hz) to run the correction
 #env_params['closed_loop_freq'] = 1380   #Frequency (Hz) to run the correction
-env_params['servo_lag'] = 2.3/env_params['closed_loop_freq']
-env_params['temp_oversampling'] = 5
+env_params['servo_lag'] = 2.2/env_params['closed_loop_freq']
+env_params['temp_oversampling'] = 1
+env_params['stellar_magnitude'] = 5
 
 env_params['turbulence_mode'] = 'atmosphere'
 #Turbulence mode, options:
@@ -50,18 +44,19 @@ env_params['turbulence_mode'] = 'atmosphere'
 #   atmosphere: Atmospheric turbulence with fixed wind velocity and angle
 #   atmosphere_random: Two-layered atmospheric turbulence with random wind velocity and angle for every episode
 
-env_params['L0'] = [50]  #Outer scale parameter of simulated atmospheric layer
-env_params['Cn2'] = [Cn_squared_from_fried_parameter(r0=0.15,wavelength=env_params['wavelength'])]
-#env_params['Cn2'] = [0.8e-13,1.3e-13]
-env_params['angles'] = [0]
-env_params['velocity'] = [15]  #Wind velocity vector
+env_params['L0'] = [50,50]  #Outer scale parameter of simulated atmospheric layer
+env_params['Cn2'] = [Cn_squared_from_fried_parameter(r0=0.15, wavelength=500e-9)]
+#env_params['Cn2'] = [1e-13,1.3e-14]
+env_params['angles'] = [0,45]
+env_params['velocity'] = [15,30]  #Wind velocity vector
 #env_params['velocity'] = [12,30]  #Wind velocity vector
 #env_params['velocity'] = [0,0]  #Wind velocity vector
-#env_params['heights'] = [0,11e3]
-env_params['heights'] = [0]
+env_params['heights'] = [0,11e3]
+env_params['scintillation'] = False
+#env_params['heights'] = [0]
 
-env_params['num_actuators'] = 41#Number of actuators of the DM along pupil diameter
-env_params['N_mla'] = 32 #Number of microlenses in Shack-Hartmann WFS
+env_params['num_actuators'] = 41 #Number of actuators of the DM along pupil diameter
+env_params['N_mla'] = 40 #Number of microlenses in Shack-Hartmann WFS
 
 env_params['control_mode'] = 'modal'
 #Control mode, options:
@@ -69,12 +64,6 @@ env_params['control_mode'] = 'modal'
 #   state: Controller takes as input slope measurements and returns slope measurements to correct for.
 #   both: Controller takes as input slope measurements and returns modal DM commands.
 #NOTE: If 'both' is used the architecture needs to be adjusted accordingly.
-
-env_params['reconstruction_matrix_name'] =  'reconstruction_matrix_xinetics24.txt'
-env_params['redo_calibration'] = not env_params['show_image']
-#Filename of the reconstruction matrix (if modal or state control method is used)
-#Reconstruction matrix R should have the form a = Rs, with a the modal coefficients and s the estimated slopes.
-#If file does not exist, it will do the calibration and save the result
 
 print('Initializing AO environment')
 env = AO_env(env_params)
@@ -93,29 +82,23 @@ params['actor_grad_clip'] = 1.   #Clipping of the gradient for updating the acto
 params['use_stateful_actor'] = True
 params['pretrain_actor'] = True
 params['pretrain_gain'] = 0.4
-#Wether to use a stateful actor as a controller. (https://fairyonice.github.io/Stateful-LSTM-model-training-in-Keras.html explains the difference)
-#If True, the hidden state is preserved during an episode and only the most recent observation is propagated through the LSTM.
-#If False, the input to the actor is a fixed number of timesteps with the hidden state initialized to zero.
-#The latter sometimes gives more stable training but has less efficient online prediction.
-#This is maybe because TBTT is only performed over a small number of timesteps so initialization is important 
-#    -> solve it with variable length training input or longer sequences?
 
 #--------------RL algorithm hyperparameters-----------
 params['gamma'] = 0.95 #Discount factor for expected future rewards
 params['reward_type'] = 'modal'
 params['buffer_size'] = 50 #Maximum number of episodes to save in the replay buffer
-params['minibatch_size'] = 1 #Batch size for training critic and actor
+params['minibatch_size'] = 16 #Batch size for training critic and actor
 params['num_training_batches'] = 1000  #Number of batches to train on every episode
 params['optimization_length'] = 10 #Size of the history/number of steps to use in the BPTT
 params['initialization_length'] = 10
 params['trajectory_length'] = 1     #Number of steps to use observed rewards instead of bootstrapping with target critic.
 #This does not work properly at ends op episodes and should be 1.
 
-params['warmup'] = 3
-params['actor_warmup'] = 3
+params['warmup'] = 0
+params['actor_warmup'] = 0
 params['action_scaling'] = 3     #Maximum possible action
-params['use_integrator'] = False
-params['integrator_gain'] = 0.6
+params['use_integrator'] = True
+params['integrator_gain'] = -0.5
 #Probability of randomly using integrator for an iteration to fill the replay buffer with 'good' experience.
 #This can be used to improve training stability. 
 #Gain of the integrator is defaulted to 0.3 and can be set in ddpg/ddpg_agent.py

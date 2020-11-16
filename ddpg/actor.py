@@ -97,16 +97,16 @@ class Actor(object):
         #x = BatchNormalization()(x)
         #x = ConvLSTM2D(8,(3,3),strides=1,padding='same',unit_forget_bias=True,stateful=stateful,\
         #        return_sequences=True)(x)
-        x = CustomConvMGU(1,(3,3),strides=1,padding='same',stateful=stateful,return_sequences=True,unit_forget_bias=True,
-                            activation='linear',recurrent_activation='tanh',kernel_initializer=RandomUniform(-3e-3,3e-3))(x)
-        #x = TimeDistributed(Conv2D(8,(3,3),strides=1,padding='same',activation='tanh'))(x)
+        #x = CustomConvGRU(8,(3,3),strides=1,padding='same',stateful=stateful,return_sequences=True,unit_forget_bias=True,
+        x = CustomConvMGU(8,(3,3),strides=1,padding='same',stateful=stateful,return_sequences=True,unit_forget_bias=True,
+                            activation='tanh',recurrent_activation='hard_sigmoid',kernel_initializer=RandomUniform(-3e-3,3e-3))(x)
         if not stateful:
             x = Lambda(lambda y: y[:,-self.opt_length:,:,:])(x)
 
         #x = TimeDistributed(Conv2D(8,(3,3),strides=1,padding='same',activation='relu'))(x)
-        #x = TimeDistributed(Conv2D(self.a_dim[-1],(3,3),strides=1,padding='same',\
-        #           kernel_initializer=RandomUniform(-3e-3,3e-3),activation='tanh',\
-        #           use_bias=False))(x)
+        x = TimeDistributed(Conv2D(self.a_dim[-1],(3,3),strides=1,padding='same',\
+                   kernel_initializer=RandomUniform(-3e-3,3e-3),activation='tanh',\
+                   use_bias=False))(x)
         #x = TimeDistributed(LocallyConnected2D(self.a_dim[-1],(1,1),strides=1,\
         #        activation='tanh',use_bias=False))(x)
         action = Lambda(lambda y: y*action_scaling)(x)

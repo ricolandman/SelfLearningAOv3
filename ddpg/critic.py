@@ -67,13 +67,14 @@ class Critic(object):
         
         x = Concatenate()([observations,prev_actions])
         #x = observations
-        x = ConvLSTM2D(16,(3,3),strides=1,padding='same',unit_forget_bias=True,return_sequences=True)(x)
+        x = CustomConvMGU(16,(3,3),strides=1,padding='same',activation='tanh',recurrent_activation='hard_sigmoid',unit_forget_bias=True,return_sequences=True)(x)
+        #x = ConvLSTM2D(16,(3,3),strides=1,padding='same',activation='tanh',recurrent_activation='hard_sigmoid',unit_forget_bias=True,return_sequences=True)(x)
         x = Lambda(lambda y: y[:,self.init_length:,:,:])(x)
         #        output_shape=self.a_dim)(x)
         x = Concatenate()([x,action])
         #x = BatchNormalization()(x)
-        x = TimeDistributed(Conv2D(16,(3,3),strides=1,padding='same',activation='relu'))(x)
-        x = TimeDistributed(Conv2D(8,(3,3),strides=1,padding='same',activation='relu'))(x)
+        x = TimeDistributed(Conv2D(16,(3,3),strides=1,padding='same',activation='tanh'))(x)
+        #x = TimeDistributed(Conv2D(8,(3,3),strides=1,padding='same',activation='tanh'))(x)
         #x = BatchNormalization()(x)
         #x = TimeDistributed(Conv2D(4,(1,1),strides=1,padding='same',activation='relu'))(x)
         #x = TimeDistributed(BatchNormalization())(x)

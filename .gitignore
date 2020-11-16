@@ -4,4 +4,10 @@
 *.pyc
 ao/__pycache__
 ddpg/__pycache__
+ao/*.pyc
+ddpg/*.pyc
 *__pycache__*
+.vscode
+models/*.hdf5
+results/logs/*.csv
+results/plots/*.png

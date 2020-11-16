@@ -34,7 +34,7 @@ class DataCollector():
 
     def run(self,sess,actor,noise,num_iterations=500):
         with sess.graph.as_default():
-            start_time = time.time()
+            t_time = time.time()
             
             #Decay noise and learning rates
             ep_reward = 0
@@ -95,12 +95,13 @@ class DataCollector():
             
             self.replay_buffer.add(np.array(self.h_o),np.array(self.h_a),np.array(self.h_r))
             average_strehl = self.env.science_image.max()
-            average_contrast = np.std(self.env.science_coro_image[self.env.dark_zone])/average_strehl
+            #average_contrast = np.mean(self.env.science_coro_image[self.env.dark_zone.shaped])/average_strehl
+            average_contrast = np.mean(np.array(self.contrasts))
             #self.average_strehls.append(np.mean(np.array(strehls)))
             #self.total_reward.append(np.sum(ep_reward))
             end_time = time.time()
             print('| Average Strehl: {0:.3f} | Total Contrast: {1:.2e} | Total reward: {2:.1f} | Time: {3:.2f} s '\
-                    .format(average_strehl,average_contrast,np.sum(ep_reward),end_time-start_time))
+                    .format(average_strehl,average_contrast,np.sum(ep_reward),end_time-t_time))
         return self.replay_buffer,average_strehl,average_contrast,ep_reward
 
 class Trainer():
@@ -116,10 +117,10 @@ class Trainer():
     def train(self,sess,replay_buffer,n_iter,noise,train_actor=True):
         #print('Start training')
         self.noise = noise
-        start_time = time.time()
+        t_time = time.time()
         self.mse.clear()
         with sess.graph.as_default():
-            start_time = time.time()
+            t_time = time.time()
             for i in range(n_iter):
                 self.sample_batch(replay_buffer)
                 self.train_critic()
@@ -128,16 +129,19 @@ class Trainer():
             self.actor.update_stateful_network()
         end_time = time.time()
         critic_loss = np.mean(np.array(self.mse))
-        print(f'Trained on {n_iter} batches in {end_time-start_time:.1f} seconds | Critic MSE: {critic_loss:.5f}')
+        print(f'Trained on {n_iter} batches in {end_time-t_time:.1f} seconds | Critic MSE: {critic_loss:.5f}')
         return self.actor, critic_loss
     
     def sample_batch(self,replay_buffer):
+        t = time.time()
         #Samples a batch (s,a,r,s') from the replay buffer
         self.s_batch, self.a_batch, self.r_batch, self.s2_batch = replay_buffer.sample_batch(
             self.batch_size,self.length)
+        print('Sampling batch took {0:.2f} seconds'.format(time.time()-t))
 
     def train_critic(self):
         #Trains critic
+        t = time.time()
         target_a = self.actor.predict_target(self.s2_batch)
         target_q = self.critic.predict_target(self.s2_batch,target_a)
         #target_q = self.critic.predict_target(self.s2_batch,target_a+self.noise*np.random.randn(*target_a.shape))
@@ -148,9 +152,12 @@ class Trainer():
 
         #Calculate critic targets
         y = self.r_batch + self.critic.gamma*target_q
+        print('Getting critic targets took {0:.2f} seconds'.format(time.time()-t))
 
         #Perform update step
+        t = time.time()
         loss = self.critic.train(self.s_batch, self.a_batch[:,-self.opt_length:], y)
+        print('Training critic took {0:.2f} seconds'.format(time.time()-t))
 
         #Update target network
         self.critic.update_target_network()
@@ -164,16 +171,20 @@ class Trainer():
 
     def train_actor(self):
         #Trains the actor
+        t = time.time()
         a_outs = self.actor.predict(self.s_batch)
         #Get critic gradient
         grads = self.critic.action_gradients(self.s_batch, a_outs)[0]
+        print('Getting action gradients took {0:.2f} seconds'.format(time.time()-t))
         
         #if self.make_debug_plots:
         #    self.a_outs.append(a_outs)
         #    self.grads.append(grads[0])
 
         #Update actor
+        t = time.time()
         self.actor.train(self.s_batch, grads)
+        print('Training actor took {0:.2f} seconds \n'.format(time.time()-t))
         self.actor.update_target_network()
         #self.actor.update_stateful_network()
 
@@ -195,8 +206,8 @@ class DDPG_agent():
         self.noise_decay = args['noise_decay']
         self.savename = args['savename']
         self.save_interval = args['save_interval']
-        self.start_actor_lr = args['actor_lr']
-        self.start_critic_lr = args['critic_lr']
+        self.t_actor_lr = args['actor_lr']
+        self.t_critic_lr = args['critic_lr']
         self.actor_lr_decay = args['actor_lr_decay']
         self.critic_lr_decay = args['critic_lr_decay']
         self.make_debug_plots = args['make_debug_plots']
@@ -357,19 +368,19 @@ class DDPG_agent():
         plt.title('Focal plane image')
         #plt.imshow(np.log10(self.env.science_coro_image[self.env.dark_zone])/self.env.science_image.max(),vmin=-5,vmax=-1,cmap='afmhot')
         plt.imshow(np.log10((self.env.science_coro_image).reshape(self.env.focal_pixels,\
-            self.env.focal_pixels)/self.env.science_image.max()),vmin=-5,vmax=-1,cmap='afmhot')
+            self.env.focal_pixels)/self.env.science_image.max()),vmin=-6,vmax=-2,cmap='inferno')
         plt.colorbar()
         plt.subplot(2,4,4)
         plt.title('Wavefront variance')
-        plt.imshow(np.sqrt(np.mean(self.env.phase_screens**2,axis=0)),cmap='Reds')
+        plt.imshow(self.env.wavefront_variance, cmap='Reds')
         plt.colorbar()
         plt.subplot(2,4,5)
         plt.title('Mean residual phase screen')
-        plt.imshow(np.mean(self.env.phase_screens,axis=0),cmap='bwr')
+        plt.imshow(self.env.mean_res_phase, cmap='bwr')
         plt.colorbar()
         plt.subplot(2,4,6)
         plt.title('Mean DM shape')
-        plt.imshow(np.mean(self.env.dm_shapes,axis=0),cmap='bwr')
+        plt.imshow(self.env.mean_dm_shape,cmap='bwr')
         plt.colorbar()
         plt.subplot(2,4,7)
         plt.title('Reward')
